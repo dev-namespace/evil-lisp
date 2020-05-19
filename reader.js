@@ -2,13 +2,20 @@
 
 const prefixes = ["'", "#", "`", "~"]
 
-function read(exp){
-    const tokens = tokenize(exp)
-    for(let i = 0; i < tokens.length; i++){
-        const exp = tokens[i]
-        if(exp[0] === "'") tokens[i] = `(quote ${exp.slice(1)})`
+function read(syntax){
+    const parsed = tokenize(syntax)
+    if(typeof parsed === 'object'){
+        for(let i = 0; i < parsed.length; i++){
+            parsed[i]  = transformations(parsed[i])
+        }
+        return parsed
     }
-    return tokens
+    return transformations(parsed)
+}
+
+function transformations(exp){
+    if(exp[0] === "'") return `(quote ${exp.slice(1)})`
+    return exp
 }
 
 function tokenize(exp){
@@ -47,4 +54,4 @@ function indexOfDelimiter(str, index, right){
     return undefined
 }
 
-module.exports = { tokenize }
+module.exports = { tokenize, read }

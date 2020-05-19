@@ -8,12 +8,12 @@ const { read } = require('./reader')
 
 
 // analyze
-function analyze(syntax){
-    const exp = read(syntax)
-    console.log('exp', exp)
+function analyze(exp){
     if(isAtom(exp)){
         if(isSelfEvaluating(exp)) return analyzeSelfEvaluating(exp)
-        if(isQuoted(exp)) return analyzeQuoted(exp) //@TODO: maybe turn '() to (quote ()) in the parser?
+        if(isQuoted(exp)) return analyzeQuoted(exp) //@TODO: when to read again to evaluate (quote x)?
+    } else {
+        if(isQuoted(exp)) return analyzeQuoted(exp)
     }
 }
 
@@ -26,14 +26,18 @@ function analyzeQuoted(exp){
     return env => unquoted
 }
 
-function evaluate(exp, env){
+function evaluate(syntax, env){
+    const exp = read(syntax)
+    console.log('exp', exp)
     const executionProcedure = analyze(exp)
     if(!executionProcedure) return wrong(`can't analyze ${exp}`)
     return executionProcedure(env)
 }
 
 function unquote(exp){
-    return second(exp)
+    exp = read(exp)
+    console.log('unq', exp)
+    return second(exp) //@TODO: read?
 }
 
 
@@ -104,7 +108,8 @@ function isSelfEvaluating(exp){
 }
 
 function isQuoted(exp){
-    return first(exp) === "quote")
+    console.log('isquoted', first(exp))
+    return first(exp) === "quote"
 }
 
 function isAssignment(exp){
