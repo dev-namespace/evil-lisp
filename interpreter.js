@@ -59,7 +59,13 @@ function executeApplication(proc, args){
     }
 
     // primitive procedure
-    return proc(...args)
+    if(isPrimitiveProcedure(proc)){
+        return executePrimitiveProcedure(proc, args)
+    }
+}
+
+function executePrimitiveProcedure(proc, args){
+    return second(proc)(args)
 }
 
 function analyzeSequence(exps){
@@ -89,6 +95,7 @@ function analyzeSelfEvaluating(exp){
     let evaluation
     if(isNumber(exp)) evaluation = Number(exp)
     if(isBoolean(exp)) evaluation = isTrue(exp) ? true : false
+    if(isString(exp)) evaluation = exp.slice(1, -1)
     return env => evaluation
 }
 
@@ -240,14 +247,14 @@ function isApplication(exp){
     return !isAtom(exp)
 }
 
+function isPrimitiveProcedure(exp){
+    return first(exp) === 'primitive'
+}
+
 function isCompoundProcedure(exp){
     return first(exp) === 'procedure'
 }
 
-//@TODO maybe primitives should share proc form with 'primitive
-// function isPrimitiveProcedure(exp){
-//     return first(exp) === 'primitive'
-// }
 
 function isTrue(exp){
     return exp !== 'false'

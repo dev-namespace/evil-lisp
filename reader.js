@@ -1,17 +1,77 @@
-function processArgs(tokens){
-    const args = []
-    tokens.forEach((token, i) => {
-        if(token.includes('%')){
-            const arg = token.replace('%', 'arg')
-            tokens[i] = arg
-            args.push(arg)
+let listOverridesPending = 0
+
+function readWhile(input, func){
+    let token = ""
+    while(func(input.peek())){
+        token += input.next()
+    }
+    return token
+}
+
+function readList(input){
+        let tokens = []
+        let openLists = input.getDelimited('(')
+        input.next()
+        while(!input.eof() && !(input.getDelimited('(') === openLists && input.peekPrev() === ')')){
+
+            // if(isWhitespace(input.peekPrev())) {input.next(); continue}
+            //open
+            if(input.peekPrev() === '(') {
+                input.openDelimited('(')
+                // console.log('opened: ', input.getDelimited('('))
+            }
+
+            // console.log('before:', input.peekPrev())
+            let token = read(input)
+            if(listOverridesPending > 0){
+                listOverridesPending--
+                tokens = token
+            } else {
+                if(token) tokens.push(token)
+            }
+            // console.log('token:', token)
+            // console.log('after:', input.peekPrev())
+
+            // close
+            if(input.peekPrev() === ')'){
+                input.closeDelimited('(')
+                // console.log('closed:', input.getDelimited('('))
+            }
         }
-    })
-    return args
+
+        // console.log('last:', input.peekPrev())
+        input.next()
+        return tokens
 }
 
 const macroCharacters = {
+    '"': input => {
+        input.next()
+        let token = readWhile(input, char => char !== '"')
+        console.log('string token',  `"${token}"`)
+        input.next()
+        return `"${token}"`
+    },
+    ".": input => {
+        input.next()
+        let token = readWhile(input, char => !isWhitespace(char) && !isTerminatingMacro(char))
+
+        // simple . operator
+        console.log('token:', token)
+        if(token === ""){
+            return '.'
+        }
+
+        // advanced . operator
+        const tokens = readList(input)
+        listOverridesPending++
+        return ['.', ['quote', token], ...tokens]
+    },
     "'": input => {
+        input.next()
+        return ['quote', read(input)]
+    },
+    ":": input => { // keywords are just symbols, @TODO make them functions
         input.next()
         return ['quote', read(input)]
     },
@@ -30,36 +90,7 @@ const macroCharacters = {
         return ['lambda', args, tokens]
     },
     // @TODO: peekPrev shouldn't exist
-    "(": input => {
-        const tokens = []
-        let openLists = input.getDelimited('(')
-        input.next()
-        while(!input.eof() && !(input.getDelimited('(') === openLists && input.peekPrev() === ')')){
-
-            // if(isWhitespace(input.peekPrev())) {input.next(); continue}
-            //open
-            if(input.peekPrev() === '(') {
-                input.openDelimited('(')
-                // console.log('opened: ', input.getDelimited('('))
-            }
-
-            // console.log('before:', input.peekPrev())
-            let token = read(input)
-            if(token) tokens.push(token)
-            // console.log('token:', token)
-            // console.log('after:', input.peekPrev())
-
-            // close
-            if(input.peekPrev() === ')'){
-                input.closeDelimited('(')
-                // console.log('closed:', input.getDelimited('('))
-            }
-        }
-
-        // console.log('last:', input.peekPrev())
-        input.next()
-        return tokens
-    },
+    "(": readList,
     ")": input => {
         input.next()
     }

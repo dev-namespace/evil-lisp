@@ -12,5 +12,4 @@ const input = `(progn ${content})`
 console.log(input)
 
 const env = createGlobalEnvironment()
-const result = evaluate(read(InputStream(input)), env)
-console.log(result)
+evaluate(read(InputStream(input)), env)

@@ -20,8 +20,13 @@ function prompt(question){
 async function launch(){
     const env = createGlobalEnvironment()
     while(!quit){
-        const result = evaluate(read(InputStream(await prompt('> '))), env)
-        console.log(result)
+        try{
+            const input = await prompt('> ')
+            const result = evaluate(read(InputStream(input)), env)
+            console.log(result)
+        } catch(err){
+            console.log(err)
+        }
     }
     rl.close()
 }

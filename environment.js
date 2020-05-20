@@ -38,6 +38,7 @@ function createGlobalEnvironment(){
     for(let primitive of primitives){
         defineVariable(primitive[0], primitive[1], env)
     }
+    defineVariable('console', console, env)
     return env
 }
 
