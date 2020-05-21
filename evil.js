@@ -18,7 +18,6 @@ let content = fs.readFileSync(path).toString()
 content = content.replace(/;.*/g, "")
 content = content.replace(/\r\n/g, " ")
 content = content.replace(/\n/g, " ")
-
 const input = `(progn ${content})`
 
 const env = createGlobalEnvironment()

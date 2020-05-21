@@ -2,51 +2,10 @@ const { recursiveMap } = require('./utils')
 
 let listOverridesPending = 0
 
-function readWhile(input, func){
-    let token = ""
-    while(func(input.peek())){
-        token += input.next()
-    }
-    return token
-}
-
-function unread(exp){
-    let result = ""
-    for(let token of exp){
-        if(Array.isArray(token)){
-            result += '('
-            result += unread(token)
-            result += ')'
-        }
-        else result += token + ' '
-    }
-    return result
-}
-
-function readList(input){
-        let tokens = []
-        let openLists = input.getDelimited('(')
-        input.next()
-        while(!input.eof() && !(input.getDelimited('(') === openLists && input.peekPrev() === ')')){
-            if(input.peekPrev() === '(') input.openDelimited('(')
-            let token = read(input)
-            if(listOverridesPending > 0){
-                listOverridesPending--
-                tokens = token
-            } else {
-                if(token) tokens.push(token)
-            }
-            if(input.peekPrev() === ')') input.closeDelimited('(')
-        }
-        input.next()
-        return tokens
-}
-
 const macroCharacters = {
     '"': input => {
         input.next()
         let token = readWhile(input, char => char !== '"')
-        // console.log('string token',  `"${token}"`)
         input.next()
         return `"${token}"`
     },
@@ -54,13 +13,13 @@ const macroCharacters = {
         input.next()
         let token = readWhile(input, char => !isWhitespace(char) && !isTerminatingMacro(char))
 
-        // simple . operator
+        // (. log console "foo")
         console.log('token:', token)
         if(token === ""){
             return '.'
         }
 
-        // advanced . operator
+        // (.log console "foo")
         const tokens = readList(input)
         listOverridesPending++
         return ['.', ['quote', token], ...tokens]
@@ -72,31 +31,32 @@ const macroCharacters = {
     "`": input => {
         input.next()
         let tokens = read(input)
-        // console.log('TOKENS:', tokens)
+        if(typeof tokens !== 'object') return ['syntaxquote', tokens]
         tokens = recursiveMap(token => {
             if(token[0] === '~'){
+                if(token[1] === '@') return ['unquoteslice', token.slice(2)]
                 return ['unquote', token.slice(1)]
             }
             return token
         }, tokens)
-        // console.log('SPLICEd:', ['syntaxquote', tokens])
         return ['syntaxquote', tokens]
     },
-    ":": input => { // keywords are just symbols, @TODO make them functions
+    ":": input => {
         input.next()
         return ['quote', read(input)]
     },
     "#": input => {
         input.next()
         let args = []
-        const tokens = read(input)
-        tokens.forEach((token, i) => {
+        let tokens = read(input)
+        tokens = recursiveMap((token) => {
             if(token.includes('%')){
                 const arg = token.replace('%', 'arg')
-                tokens[i] = arg
-                args.push(arg)
+                if(!args.includes(arg)) args.push(arg)
+                return arg
             }
-        })
+            return token
+        }, tokens)
         return ['lambda', args, tokens]
     },
     "(": readList,
@@ -118,12 +78,51 @@ function read(input){
                 if(isTerminatingMacro(char)) return token
                 if(isWhitespace(char)) return token
                 if(isIllegal(char)) return input.error('Illegal character')
-                // console.log('C:', char)
                 token += char
             }
             return token
         }
     }
+}
+
+function unread(exp){
+    let result = ""
+    for(let token of exp){
+        if(Array.isArray(token)){
+            result += '('
+            result += unread(token)
+            result += ')'
+        }
+        else result += token + ' '
+    }
+    return result
+}
+
+function readWhile(input, func){
+    let token = ""
+    while(func(input.peek())){
+        token += input.next()
+    }
+    return token
+}
+
+function readList(input){
+        let tokens = []
+        let openLists = input.getDelimited('(')
+        input.next()
+        while(!input.eof() && !(input.getDelimited('(') === openLists && input.peekPrev() === ')')){
+            if(input.peekPrev() === '(') input.openDelimited('(')
+            let token = read(input)
+            if(listOverridesPending > 0){
+                listOverridesPending--
+                tokens = token
+            } else {
+                if(token) tokens.push(token)
+            }
+            if(input.peekPrev() === ')') input.closeDelimited('(')
+        }
+        input.next()
+        return tokens
 }
 
 function InputStream(input){
@@ -135,6 +134,8 @@ function InputStream(input){
     const eof = () => pos >= (input.length)
     const getPos = () => pos
     const error = msg => {throw new Error(`${msg} at ${pos}`)}
+
+    //@TODO move this out of InputStream
     const getDelimited = char => delimited[char] || 0
     const closeDelimited = char => delimited[char]--
     const openDelimited = char => {
@@ -168,6 +169,5 @@ function isConstituent(char){
 function isIllegal(char){
     return false
 }
-
 
 module.exports = { InputStream, read, unread}

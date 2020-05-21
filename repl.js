@@ -3,12 +3,13 @@ const primitives = require('./primitives')
 const { evaluate } = require('./interpreter')
 const { read, InputStream } = require('./reader')
 const readline = require("readline")
+
+let quit = false
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
-});
+})
 
-const quit = false
 function prompt(question){
     return new Promise((resolve, reject) => {
         rl.question(question, input => {
@@ -33,6 +34,7 @@ async function launch(){
     while(!quit){
         try{
             const input = await prompt('> ')
+            if(quit) break
             const result = evaluate(read(InputStream(input)), env)
             console.log(result)
         } catch(err){

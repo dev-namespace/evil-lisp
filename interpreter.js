@@ -31,42 +31,12 @@ function analyze(exp){
 // ===============================================================
 function analyzeMacroDefinition(exp){
     const name = second(exp)
-    const args = third(exp)
-    // const bodyProcedure = analyzeSequence(rest(rest(rest(exp))))
+    const params = third(exp)
     const body = rest(rest(rest(exp)))
     return env => {
-        const macro = makeMacro(args, body, env)
+        const macro = makeMacro(params, body, env)
         defineVariable(name, macro, env)
         return macro
-    }
-}
-
-function makeMacro(args, body, env){
-    return ['macro', args, body, env]
-}
-
-function isMacroDefinition(exp){
-    return first(exp) === 'defmacro'
-}
-
-function isMacroExpansion(exp){
-    return first(exp) === 'macroexpand'
-}
-
-function isMacro(exp){
-    return first(exp) === 'macro'
-}
-
-function analyzeIf(exp){
-    const cproc = analyze(getIfCondition(exp))
-    const bproc = analyze(getIfBody(exp))
-    const eproc = getIfElseBody(exp) ? analyze(getIfElseBody(exp)) : undefined
-    return env => {
-        if(cproc(env)){
-            return bproc(env)
-        } else {
-            if(eproc) return eproc(env)
-        }
     }
 }
 
@@ -83,11 +53,9 @@ function analyzeMacroExpansion(exp){
 function expandMacro(proc, args){
     //@TODO abstract access
     const body = third(proc)
-    const procParams = second(proc)
-    const procEnv = fourth(proc)
-    const extended = extendEnvironment(procEnv)
-    defineVariables(procParams, args, extended)
-    return map(proc => evaluate(proc, extended), body)
+    const extended = createScope(proc, args)
+    //@TODO maybe executeSequence?
+    return map(proc => evaluate(proc, extended), body).slice(-1)
 }
 
 function analyzeApplication(exp){
@@ -95,16 +63,16 @@ function analyzeApplication(exp){
     return env => {
         const proc = operatorProc(env)
         if(isMacro(proc)){
-            //@TODO abstract access
+            const macroEnv = extendEnvironment(env) // macros have their own scope
             const args = getApplicationOperands(exp) // args are not analyzed
             const expanded = expandMacro(proc, args)
-            return map(proc => evaluate(proc, env), expanded)
+            return map(proc => evaluate(proc, macroEnv), expanded)
         }
 
         // we're trading off arg evaluation efficiency for macros here
         const operandsProc = map(analyze, getApplicationOperands(exp))
         const args = map(proc => proc(env), operandsProc)
-        return executeApplication(proc, args)
+        return executeProcedure(proc, args)
     }
 }
 
@@ -123,7 +91,7 @@ function createScope(proc, args){
     return extended
 }
 
-function executeApplication(proc, args){
+function executeProcedure(proc, args){
     // proc argument can be either a function initially in the global environment (primitive procedure)
     // or a compound procedure
     if(isCompoundProcedure(proc)){
@@ -136,28 +104,26 @@ function executeApplication(proc, args){
 }
 
 function executePrimitiveProcedure(proc, args){
-    //@TODO abstract access
+    //@TODO stop being lazy and abstract access
     return second(proc)(args)
 }
 
-function analyzeSequence(exps){
-    // @TODO: maybe procs is not the best name
-    // @TODO: this could be done with reduce
-    const executeSequence = (procs, env) => { //@TODO no need to be inside..?
-        if(isLast(procs)) return first(procs)(env)
-        else {
-            first(procs)(env)
-            return executeSequence(rest(procs), env)
-        }
+function executeSequence(procs, env) { //@TODO no need to be inside..?
+    if(isLast(procs)) return first(procs)(env)
+    else {
+        first(procs)(env)
+        return executeSequence(rest(procs), env)
     }
+}
+
+function analyzeSequence(exps){
     const procs = map(analyze, exps)
-    if(isEmpty(procs)) wrong(`empty sequence in analyze`)
+    if(isEmpty(procs)) wrong(`can't analyze empty sequence`)
     return env => executeSequence(procs, env)
 }
 
 function analyzeLambda(exp){
     const vars = getLambdaParameters(exp)
-    console.log('LAMBDA ARGS:', vars)
     const bodyProcedure = analyzeSequence(getLambdaBody(exp))
     // the procedure contains the environment in which the lambda was defined
     // procedure packages args, body and environment
@@ -175,9 +141,11 @@ function analyzeSelfEvaluating(exp){
 function recursiveSyntaxUnquote(exps, env){
     let output = []
     for(let exp of exps){
-        if(typeof exp === 'object') {
+        if(!isAtom(exp)) {
             if(isUnquoted(exp)){
                 output.push(syntaxUnquote(exp, env))
+            } else if(isUnquoteSliced(exp)){
+                output.push(...syntaxUnquote(exp, env))
             } else {
                 output.push(recursiveSyntaxUnquote(exp, env))
             }
@@ -191,6 +159,7 @@ function analyzeSyntaxQuoted(exp){
     // we assume it's a list
     return env => {
         const unquoted = unquote(exp)
+        if(isAtom(unquoted)) return unquoted
         const result = recursiveSyntaxUnquote(unquoted, env)
         return result
     }
@@ -202,7 +171,6 @@ function analyzeQuoted(exp){
 }
 
 function syntaxUnquote(exp, env){
-    // console.log('syntaxunquote:', second(exp))
     return evaluate(second(exp), env)
 }
 
@@ -226,8 +194,25 @@ function analyzeDefinition(exp){
     return env => defineVariable(variable, proc(env), env)
 }
 
+function analyzeIf(exp){
+    const cproc = analyze(getIfCondition(exp))
+    const bproc = analyze(getIfBody(exp))
+    const eproc = getIfElseBody(exp) ? analyze(getIfElseBody(exp)) : undefined
+    return env => {
+        if(cproc(env)){
+            return bproc(env)
+        } else {
+            if(eproc) return eproc(env)
+        }
+    }
+}
+
 function makeProcedure(parameters, body, env){
     return ['procedure', parameters, body, env]
+}
+
+function makeMacro(parameters, body, env){
+    return [ 'macro', parameters, body, env ]
 }
 
 // Getters
@@ -334,6 +319,10 @@ function isUnquoted(exp){
     return first(exp) === "unquote"
 }
 
+function isUnquoteSliced(exp){
+    return first(exp) === "unquoteslice"
+}
+
 function isAssignment(exp){
     return first(exp) === 'set!'
 }
@@ -347,7 +336,7 @@ function isIf(exp){
 }
 
 function isLambda(exp){
-    return first(exp) === 'lambda'
+    return first(exp) === 'lambda' || first(exp) === 'fn'
 }
 
 function isProgn(exp){
@@ -364,6 +353,18 @@ function isPrimitiveProcedure(exp){
 
 function isCompoundProcedure(exp){
     return first(exp) === 'procedure'
+}
+
+function isMacroDefinition(exp){
+    return first(exp) === 'defmacro'
+}
+
+function isMacroExpansion(exp){
+    return first(exp) === 'macroexpand'
+}
+
+function isMacro(exp){
+    return first(exp) === 'macro'
 }
 
 function isTrue(exp){
@@ -415,4 +416,4 @@ function wrong(error){
     return error
 }
 
-module.exports = { evaluate, analyze, executeApplication }
+module.exports = { evaluate, analyze, executeProcedure }
