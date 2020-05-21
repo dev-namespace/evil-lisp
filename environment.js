@@ -1,5 +1,3 @@
-const primitives = require('./primitives')
-
 function Environment(parent){
     this.vars = Object.create(parent ? parent.vars : null)
     this.parent = parent
@@ -33,18 +31,8 @@ const defineVariables = (names, values, env) => {
     }
 }
 
-function createGlobalEnvironment(){
-    const env = createEnvironment()
-    for(let primitive of primitives){
-        defineVariable(primitive[0], primitive[1], env)
-    }
-    defineVariable('console', console, env)
-    return env
-}
-
 module.exports = {
     createEnvironment,
-    createGlobalEnvironment,
     lookupVariable,
     setVariable,
     defineVariable,

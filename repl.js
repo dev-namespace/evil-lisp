@@ -1,4 +1,5 @@
-const { createGlobalEnvironment } = require('./environment')
+const { createEnvironment, defineVariable } = require('./environment')
+const primitives = require('./primitives')
 const { evaluate } = require('./interpreter')
 const { read, InputStream } = require('./reader')
 const readline = require("readline")
@@ -17,8 +18,18 @@ function prompt(question){
     })
 }
 
+function createGlobalEnvironment(){
+    const env = createEnvironment()
+    for(let primitive of primitives){
+        defineVariable(primitive[0], primitive[1], env)
+    }
+    defineVariable('console', console, env)
+    return env
+}
+
 async function launch(){
     const env = createGlobalEnvironment()
+
     while(!quit){
         try{
             const input = await prompt('> ')

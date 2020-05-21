@@ -1,9 +1,9 @@
-const { read, InputStream } = require('./reader')
-const { isSurroundedBy, recursiveMap } = require('./utils')
+const { unread } = require('./reader')
+const { isSurroundedBy } = require('./utils')
 const { lookupVariable, defineVariable, defineVariables, setVariable, extendEnvironment} = require('./environment')
 
 function evaluate(exp, env){
-    console.log('exp', exp)
+    // console.log('exp', exp)
     const executionProcedure = analyze(exp)
     if(!executionProcedure) return wrong(`can't analyze ${exp}`)
     return executionProcedure(env)
@@ -23,19 +23,17 @@ function analyze(exp){
     if(isLambda(exp)) return analyzeLambda(exp)
     if(isProgn(exp)) return analyzeSequence(getPrognActions(exp))
     if(isMacroDefinition(exp)) return analyzeMacroDefinition(exp)
+    if(isMacroExpansion(exp)) return analyzeMacroExpansion(exp) // has to go here?
     if(isApplication(exp)) return analyzeApplication(exp)
 }
 
 // Analyze functions
 // ===============================================================
-
 function analyzeMacroDefinition(exp){
-    console.log('analyzing macro')
     const name = second(exp)
     const args = third(exp)
     // const bodyProcedure = analyzeSequence(rest(rest(rest(exp))))
     const body = rest(rest(rest(exp)))
-    // console.log('BODY:', body[0][1])
     return env => {
         const macro = makeMacro(args, body, env)
         defineVariable(name, macro, env)
@@ -49,6 +47,10 @@ function makeMacro(args, body, env){
 
 function isMacroDefinition(exp){
     return first(exp) === 'defmacro'
+}
+
+function isMacroExpansion(exp){
+    return first(exp) === 'macroexpand'
 }
 
 function isMacro(exp){
@@ -68,29 +70,35 @@ function analyzeIf(exp){
     }
 }
 
+function analyzeMacroExpansion(exp){
+    const macroExp = unquote(second(exp))
+    const operatorProc = analyze(getApplicationOperator(macroExp))
+    return env => {
+        const proc = operatorProc(env)
+        const args = getApplicationOperands(macroExp) // args are not analyzed
+        return unread(expandMacro(proc, args))
+    }
+}
+
+function expandMacro(proc, args){
+    //@TODO abstract access
+    const body = third(proc)
+    const procParams = second(proc)
+    const procEnv = fourth(proc)
+    const extended = extendEnvironment(procEnv)
+    defineVariables(procParams, args, extended)
+    return map(proc => evaluate(proc, extended), body)
+}
+
 function analyzeApplication(exp){
     const operatorProc = analyze(getApplicationOperator(exp))
     return env => {
         const proc = operatorProc(env)
         if(isMacro(proc)){
             //@TODO abstract access
-            // const operandsProc = map(analyze, getApplicationOperands(exp))
-            // const args = map(proc => proc(env), operandsProc)
             const args = getApplicationOperands(exp) // args are not analyzed
-            // console.log('MAKRO', proc)
-            // console.log('MAKROARGs', args)
-            const procParams = second(proc)
-            const procEnv = fourth(proc)
-            const extended = extendEnvironment(procEnv)
-            defineVariables(procParams, args, extended)
-            // console.log('EXTENDED!!!!:', extended)
-            const expanded = expandMacro(proc, extended)
-            // console.log('expanded:', expanded)
-
-            return map(proc => evaluate(proc, extended), expanded)
-            // const evaluation = evaluate(expanded, extended)
-            // console.log('evaluation:', evaluation)
-            // return evaluation
+            const expanded = expandMacro(proc, args)
+            return map(proc => evaluate(proc, env), expanded)
         }
 
         // we're trading off arg evaluation efficiency for macros here
@@ -100,27 +108,31 @@ function analyzeApplication(exp){
     }
 }
 
+function createScope(proc, args){
+    //@TODO factor arg destructuring into another function
+    const params = getProcedureParameters(proc)
+    const extended = extendEnvironment(getProcedureEnvironment(proc))
+    const restIndex = params.indexOf('&')
+    if(restIndex >= 0){
+        const restArgs = args.slice(restIndex)
+        defineVariables(params.slice(0, restIndex), args.slice(0, restIndex), extended)
+        defineVariable(params[restIndex + 1], restArgs, extended)
+    } else {
+        defineVariables(params, args, extended)
+    }
+    return extended
+}
+
 function executeApplication(proc, args){
     // proc argument can be either a function initially in the global environment (primitive procedure)
     // or a compound procedure
     if(isCompoundProcedure(proc)){
-        const extended = extendEnvironment(getProcedureEnvironment(proc))
-        defineVariables(getProcedureParameters(proc), args, extended)
-        return getProcedureBody(proc)(extended)
+        const scope = createScope(proc, args)
+        return getProcedureBody(proc)(scope)
     }
     if(isPrimitiveProcedure(proc)){
         return executePrimitiveProcedure(proc, args)
     }
-}
-
-function expandMacro(proc, env){
-    //@TODO abstract access
-    const body = third(proc)
-    // console.log('preexpand:', body)
-    // console.log('preexpand-detail:', body[0][1])
-    return map(proc => evaluate(proc, env), body)
-    // return evaluate(third(proc), env)
-    // return third(proc)(args)
 }
 
 function executePrimitiveProcedure(proc, args){
@@ -145,6 +157,7 @@ function analyzeSequence(exps){
 
 function analyzeLambda(exp){
     const vars = getLambdaParameters(exp)
+    console.log('LAMBDA ARGS:', vars)
     const bodyProcedure = analyzeSequence(getLambdaBody(exp))
     // the procedure contains the environment in which the lambda was defined
     // procedure packages args, body and environment
@@ -162,9 +175,7 @@ function analyzeSelfEvaluating(exp){
 function recursiveSyntaxUnquote(exps, env){
     let output = []
     for(let exp of exps){
-        // console.log('PROGRESS', exp)
         if(typeof exp === 'object') {
-            // console.log('isObject')
             if(isUnquoted(exp)){
                 output.push(syntaxUnquote(exp, env))
             } else {
@@ -172,7 +183,6 @@ function recursiveSyntaxUnquote(exps, env){
             }
         }
         else output.push(exp)
-        // console.log('PROGRESS-OOO', output)
     }
     return output
 }
@@ -181,10 +191,7 @@ function analyzeSyntaxQuoted(exp){
     // we assume it's a list
     return env => {
         const unquoted = unquote(exp)
-        // console.log('YYYY', unquoted)
-        // const result = recursiveMap(exp => isUnquoted(exp) ? syntaxUnquote(exp, env) : exp, unquoted)
         const result = recursiveSyntaxUnquote(unquoted, env)
-        // console.log('XXXX', result)
         return result
     }
 }
@@ -408,4 +415,4 @@ function wrong(error){
     return error
 }
 
-module.exports = { evaluate }
+module.exports = { evaluate, analyze, executeApplication }

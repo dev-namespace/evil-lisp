@@ -10,6 +10,19 @@ function readWhile(input, func){
     return token
 }
 
+function unread(exp){
+    let result = ""
+    for(let token of exp){
+        if(Array.isArray(token)){
+            result += '('
+            result += unread(token)
+            result += ')'
+        }
+        else result += token + ' '
+    }
+    return result
+}
+
 function readList(input){
         let tokens = []
         let openLists = input.getDelimited('(')
@@ -157,4 +170,4 @@ function isIllegal(char){
 }
 
 
-module.exports = { InputStream, read}
+module.exports = { InputStream, read, unread}
