@@ -9,7 +9,6 @@ content = content.replace(/\r\n/g, " ")
 content = content.replace(/\n/g, " ")
 
 const input = `(progn ${content})`
-console.log(input)
 
 const env = createGlobalEnvironment()
 evaluate(read(InputStream(input)), env)

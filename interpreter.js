@@ -1,33 +1,58 @@
-const { read } = require('./reader')
+const { read, InputStream } = require('./reader')
+const { isSurroundedBy, recursiveMap } = require('./utils')
 const { lookupVariable, defineVariable, defineVariables, setVariable, extendEnvironment} = require('./environment')
-
-//@TODO: data-directed aproach so eval can be modified from outside
-//@TODO: . operator
 
 function evaluate(exp, env){
     console.log('exp', exp)
     const executionProcedure = analyze(exp)
-    // console.log('proc', executionProcedure.toString())
     if(!executionProcedure) return wrong(`can't analyze ${exp}`)
     return executionProcedure(env)
 }
 
 function analyze(exp){
-    if(isAtom(exp)){ //@TODO probably should go out
-        if(isSelfEvaluating(exp)) return analyzeSelfEvaluating(exp)
-        if(isVariable(exp)) return analyzeVariable(exp)
-    } else {
-        if(isQuoted(exp)) return analyzeQuoted(exp)
-        if(isAssignment(exp)) return analyzeAssignment(exp)
-        if(isDefinition(exp)) return analyzeDefinition(exp)
-        if(isIf(exp)) return analyzeIf(exp)
-        //@TODO cond
-        if(isLambda(exp)) return analyzeLambda(exp)
-        if(isProgn(exp)) return analyzeSequence(getPrognActions(exp))
+    //@TODO: data-directed aproach so eval can be modified from outside
+    if(isSelfEvaluating(exp)) return analyzeSelfEvaluating(exp)
+    if(isVariable(exp)) return analyzeVariable(exp)
+    if(isQuoted(exp)) return analyzeQuoted(exp)
+    if(isSyntaxQuoted(exp)) return analyzeSyntaxQuoted(exp)
+    if(isAssignment(exp)) return analyzeAssignment(exp)
+    if(isDefinition(exp)) return analyzeDefinition(exp)
+    if(isIf(exp)) return analyzeIf(exp)
+    //@TODO cond <- or should they be macros?
+    //@TODO let <- or should they be macros?
+    if(isLambda(exp)) return analyzeLambda(exp)
+    if(isProgn(exp)) return analyzeSequence(getPrognActions(exp))
+    if(isMacroDefinition(exp)) return analyzeMacroDefinition(exp)
+    if(isApplication(exp)) return analyzeApplication(exp)
+}
 
-        // everything else is considered application
-        if(isApplication(exp)) return analyzeApplication(exp)
+// Analyze functions
+// ===============================================================
+
+function analyzeMacroDefinition(exp){
+    console.log('analyzing macro')
+    const name = second(exp)
+    const args = third(exp)
+    // const bodyProcedure = analyzeSequence(rest(rest(rest(exp))))
+    const body = rest(rest(rest(exp)))
+    // console.log('BODY:', body[0][1])
+    return env => {
+        const macro = makeMacro(args, body, env)
+        defineVariable(name, macro, env)
+        return macro
     }
+}
+
+function makeMacro(args, body, env){
+    return ['macro', args, body, env]
+}
+
+function isMacroDefinition(exp){
+    return first(exp) === 'defmacro'
+}
+
+function isMacro(exp){
+    return first(exp) === 'macro'
 }
 
 function analyzeIf(exp){
@@ -45,8 +70,34 @@ function analyzeIf(exp){
 
 function analyzeApplication(exp){
     const operatorProc = analyze(getApplicationOperator(exp))
-    const operandsProc = map(analyze, getApplicationOperands(exp))
-    return env => executeApplication(operatorProc(env), map(proc => proc(env), operandsProc))
+    return env => {
+        const proc = operatorProc(env)
+        if(isMacro(proc)){
+            //@TODO abstract access
+            // const operandsProc = map(analyze, getApplicationOperands(exp))
+            // const args = map(proc => proc(env), operandsProc)
+            const args = getApplicationOperands(exp) // args are not analyzed
+            // console.log('MAKRO', proc)
+            // console.log('MAKROARGs', args)
+            const procParams = second(proc)
+            const procEnv = fourth(proc)
+            const extended = extendEnvironment(procEnv)
+            defineVariables(procParams, args, extended)
+            // console.log('EXTENDED!!!!:', extended)
+            const expanded = expandMacro(proc, extended)
+            // console.log('expanded:', expanded)
+
+            return map(proc => evaluate(proc, extended), expanded)
+            // const evaluation = evaluate(expanded, extended)
+            // console.log('evaluation:', evaluation)
+            // return evaluation
+        }
+
+        // we're trading off arg evaluation efficiency for macros here
+        const operandsProc = map(analyze, getApplicationOperands(exp))
+        const args = map(proc => proc(env), operandsProc)
+        return executeApplication(proc, args)
+    }
 }
 
 function executeApplication(proc, args){
@@ -57,14 +108,23 @@ function executeApplication(proc, args){
         defineVariables(getProcedureParameters(proc), args, extended)
         return getProcedureBody(proc)(extended)
     }
-
-    // primitive procedure
     if(isPrimitiveProcedure(proc)){
         return executePrimitiveProcedure(proc, args)
     }
 }
 
+function expandMacro(proc, env){
+    //@TODO abstract access
+    const body = third(proc)
+    // console.log('preexpand:', body)
+    // console.log('preexpand-detail:', body[0][1])
+    return map(proc => evaluate(proc, env), body)
+    // return evaluate(third(proc), env)
+    // return third(proc)(args)
+}
+
 function executePrimitiveProcedure(proc, args){
+    //@TODO abstract access
     return second(proc)(args)
 }
 
@@ -99,9 +159,48 @@ function analyzeSelfEvaluating(exp){
     return env => evaluation
 }
 
+function recursiveSyntaxUnquote(exps, env){
+    let output = []
+    for(let exp of exps){
+        // console.log('PROGRESS', exp)
+        if(typeof exp === 'object') {
+            // console.log('isObject')
+            if(isUnquoted(exp)){
+                output.push(syntaxUnquote(exp, env))
+            } else {
+                output.push(recursiveSyntaxUnquote(exp, env))
+            }
+        }
+        else output.push(exp)
+        // console.log('PROGRESS-OOO', output)
+    }
+    return output
+}
+
+function analyzeSyntaxQuoted(exp){
+    // we assume it's a list
+    return env => {
+        const unquoted = unquote(exp)
+        // console.log('YYYY', unquoted)
+        // const result = recursiveMap(exp => isUnquoted(exp) ? syntaxUnquote(exp, env) : exp, unquoted)
+        const result = recursiveSyntaxUnquote(unquoted, env)
+        // console.log('XXXX', result)
+        return result
+    }
+}
+
 function analyzeQuoted(exp){
     const unquoted = unquote(exp)
     return env => unquoted
+}
+
+function syntaxUnquote(exp, env){
+    // console.log('syntaxunquote:', second(exp))
+    return evaluate(second(exp), env)
+}
+
+function unquote(exp){
+    return second(exp) //@TODO: read?
 }
 
 function analyzeVariable(exp){
@@ -120,16 +219,12 @@ function analyzeDefinition(exp){
     return env => defineVariable(variable, proc(env), env)
 }
 
-function unquote(exp){
-    return second(exp) //@TODO: read?
-}
-
-//@TODO makeProgn
 function makeProcedure(parameters, body, env){
     return ['procedure', parameters, body, env]
 }
 
 // Getters
+// ===============================================================
 function getIfCondition(exp){
     return second(exp)
 }
@@ -191,6 +286,7 @@ function getDefinitionValue(exp){
 }
 
 // Predicates
+// ===============================================================
 function isAtom(exp){
     return typeof exp !== 'object'
 }
@@ -221,6 +317,14 @@ function isSelfEvaluating(exp){
 
 function isQuoted(exp){
     return first(exp) === "quote"
+}
+
+function isSyntaxQuoted(exp){
+    return first(exp) === 'syntaxquote'
+}
+
+function isUnquoted(exp){
+    return first(exp) === "unquote"
 }
 
 function isAssignment(exp){
@@ -255,7 +359,6 @@ function isCompoundProcedure(exp){
     return first(exp) === 'procedure'
 }
 
-
 function isTrue(exp){
     return exp !== 'false'
 }
@@ -264,6 +367,8 @@ function isFalse(exp){
     return exp === 'false'
 }
 
+// Sequence
+// ===============================================================
 function first(seq){
     return seq[0]
 }
@@ -296,15 +401,11 @@ function map(func, seq){
     return seq.map(func)
 }
 
+
+// Misc.
+// ===============================================================
 function wrong(error){
     return error
-}
-
-// utils
-// ========================================
-
-function isSurroundedBy(str, first, last){
-    return str[0] === first || str.slice(-1) === last
 }
 
 module.exports = { evaluate }

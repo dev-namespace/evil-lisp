@@ -1,3 +1,5 @@
+const { recursiveMap } = require('./utils')
+
 let listOverridesPending = 0
 
 function readWhile(input, func){
@@ -13,15 +15,7 @@ function readList(input){
         let openLists = input.getDelimited('(')
         input.next()
         while(!input.eof() && !(input.getDelimited('(') === openLists && input.peekPrev() === ')')){
-
-            // if(isWhitespace(input.peekPrev())) {input.next(); continue}
-            //open
-            if(input.peekPrev() === '(') {
-                input.openDelimited('(')
-                // console.log('opened: ', input.getDelimited('('))
-            }
-
-            // console.log('before:', input.peekPrev())
+            if(input.peekPrev() === '(') input.openDelimited('(')
             let token = read(input)
             if(listOverridesPending > 0){
                 listOverridesPending--
@@ -29,17 +23,8 @@ function readList(input){
             } else {
                 if(token) tokens.push(token)
             }
-            // console.log('token:', token)
-            // console.log('after:', input.peekPrev())
-
-            // close
-            if(input.peekPrev() === ')'){
-                input.closeDelimited('(')
-                // console.log('closed:', input.getDelimited('('))
-            }
+            if(input.peekPrev() === ')') input.closeDelimited('(')
         }
-
-        // console.log('last:', input.peekPrev())
         input.next()
         return tokens
 }
@@ -48,7 +33,7 @@ const macroCharacters = {
     '"': input => {
         input.next()
         let token = readWhile(input, char => char !== '"')
-        console.log('string token',  `"${token}"`)
+        // console.log('string token',  `"${token}"`)
         input.next()
         return `"${token}"`
     },
@@ -71,12 +56,24 @@ const macroCharacters = {
         input.next()
         return ['quote', read(input)]
     },
+    "`": input => {
+        input.next()
+        let tokens = read(input)
+        // console.log('TOKENS:', tokens)
+        tokens = recursiveMap(token => {
+            if(token[0] === '~'){
+                return ['unquote', token.slice(1)]
+            }
+            return token
+        }, tokens)
+        // console.log('SPLICEd:', ['syntaxquote', tokens])
+        return ['syntaxquote', tokens]
+    },
     ":": input => { // keywords are just symbols, @TODO make them functions
         input.next()
         return ['quote', read(input)]
     },
     "#": input => {
-        // @TODO moveOut
         input.next()
         let args = []
         const tokens = read(input)
@@ -89,14 +86,12 @@ const macroCharacters = {
         })
         return ['lambda', args, tokens]
     },
-    // @TODO: peekPrev shouldn't exist
     "(": readList,
     ")": input => {
         input.next()
     }
 }
 
-//@TODO: edge case "this is a string (but won't work)" -> "should be macro
 function read(input){
     while(!input.eof()){
         let char = input.peek()
