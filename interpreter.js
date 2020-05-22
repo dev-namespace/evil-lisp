@@ -1,16 +1,20 @@
 const { unread } = require('./reader')
 const { isSurroundedBy } = require('./utils')
-const { lookupVariable, defineVariable, defineVariables, setVariable, extendEnvironment} = require('./environment')
+const { lookupVariable,
+        defineVariable,
+        defineVariables,
+        setVariable,
+        extendEnvironment } = require('./environment')
 
 function evaluate(exp, env){
-    // console.log('exp', exp)
+    // console.log('evaluating:', exp)
     const executionProcedure = analyze(exp)
     if(!executionProcedure) return wrong(`can't analyze ${exp}`)
     return executionProcedure(env)
 }
 
 function analyze(exp){
-    //@TODO: data-directed aproach so eval can be modified from outside
+    //@TODO: data-directed aproach so analyze can be modified from outside
     if(isSelfEvaluating(exp)) return analyzeSelfEvaluating(exp)
     if(isVariable(exp)) return analyzeVariable(exp)
     if(isQuoted(exp)) return analyzeQuoted(exp)
@@ -54,7 +58,13 @@ function expandMacro(proc, args){
     //@TODO abstract access
     const body = third(proc)
     const extended = createScope(proc, args)
-    //@TODO maybe executeSequence?
+    /* This is not executeSequence because there is unquoting involved. eg:
+        (defmacro let (bindings & body)
+            (def pairs (partition bindings 2))
+            (def definitions (map #(list 'def (get % 0) (get % 1)) pairs))
+            ->`(progn
+                ~definitions
+                ~@body)) */
     return map(proc => evaluate(proc, extended), body).slice(-1)
 }
 
@@ -108,7 +118,7 @@ function executePrimitiveProcedure(proc, args){
     return second(proc)(args)
 }
 
-function executeSequence(procs, env) { //@TODO no need to be inside..?
+function executeSequence(procs, env) {
     if(isLast(procs)) return first(procs)(env)
     else {
         first(procs)(env)
@@ -408,7 +418,6 @@ function isEmpty(seq){
 function map(func, seq){
     return seq.map(func)
 }
-
 
 // Misc.
 // ===============================================================
