@@ -1,45 +1,45 @@
-;; (def x 6)
-;; (def y 5)
+(def x 6)
+(def y 5)
 
-;; (def suma (lambda (a b)
-;;             (def z 10000)
-;;             (+ a (+ b z))))
+(def suma (lambda (a b)
+            (def z 10000)
+            (+ a (+ b z))))
 
-;; (def result (suma x y))
+(def result (suma x y))
 
-;; (print "result: " result)
+(print "result: " result)
 
-;; (if (not (not true))
-;;     (print result)
-;;     (print 1000))
+(if (not (not true))
+    (print result)
+    (print 1000))
 
-;; (print "unkuoted" '`(progn
-;;     (print ~greeting)
-;;     (print ~departure)))
+(print "unkuoted" '`(progn
+    (print ~greeting)
+    (print ~departure)))
 
-;; (defmacro greet (greeting departure)
-;;   `(progn
-;;     (print ~greeting)
-;;     (print ~departure)))
+(defmacro greet (greeting departure)
+  `(progn
+    (print ~greeting)
+    (print ~departure)))
 
-;; (defmacro unless (pred a b)
-;;   `(if (not ~pred) ~a ~b))
+(defmacro unless (pred a b)
+  `(if (not ~pred) ~a ~b))
 
-;; (def z 3)
+(def z 3)
 
-;; (print "expansion1:" (macroexpand '(unless true
-;;   (print "will print")
-;;   (print "won't print"))))
+(print "expansion1:" (macroexpand '(unless true
+  (print "will print")
+  (print "won't print"))))
 
-;; (print "expansion2:" (macroexpand '(greet
-;;  z
-;;  :bye)))
+(print "expansion2:" (macroexpand '(greet
+ z
+ :bye)))
 
-;; (print "==================================================================")
-;; (print "==================================================================")
-;; (print "==================================================================")
-;; (print "==================================================================")
-;; (print "==================================================================")
+(print "==================================================================")
+(print "==================================================================")
+(print "==================================================================")
+(print "==================================================================")
+(print "==================================================================")
 
 
 (def suma (lambda (a b)
@@ -69,3 +69,8 @@
   (print "this works too" b)) ;3
 
 (print `hola)
+
+
+(progn
+  (print "hola")
+  `(print "hola"))

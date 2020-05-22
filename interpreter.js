@@ -6,11 +6,20 @@ const { lookupVariable,
         setVariable,
         extendEnvironment } = require('./environment')
 
+// DOMAIN NOTES
+// ================================
+// Atom         Not an s-expression
+// Expression   S-expression or atom
+// Analyze      Given an expression, generates the pertinent execution function
+// Execution    Does what analysis determined should be done taking environment into account
+// Evaluation   Analysis + execution
+// Procedure    Compound procedure: ['procedure', parameters, bodyExecution, env]
+// Primitive    Primitive procedure: ['primitive', function]
+
 function evaluate(exp, env){
-    // console.log('evaluating:', exp)
-    const executionProcedure = analyze(exp)
-    if(!executionProcedure) return wrong(`can't analyze ${exp}`)
-    return executionProcedure(env)
+    const execution = analyze(exp)
+    if(!execution) return wrong(`can't analyze ${exp}`)
+    return execution(env)
 }
 
 function analyze(exp){
@@ -45,77 +54,69 @@ function analyzeMacroDefinition(exp){
 }
 
 function analyzeMacroExpansion(exp){
-    const macroExp = unquote(second(exp))
-    const operatorProc = analyze(getApplicationOperator(macroExp))
+    const macroCallExp = unquote(second(exp))
+    const operatorExec = analyze(getApplicationOperator(macroCallExp))
+    const args = getApplicationOperands(macroCallExp) // args are not analyzed
     return env => {
-        const proc = operatorProc(env)
-        const args = getApplicationOperands(macroExp) // args are not analyzed
-        return unread(expandMacro(proc, args))
+        const macro = operatorExec(env)
+        return unread(expandMacro(macro, args))
     }
 }
 
-function expandMacro(proc, args){
-    //@TODO abstract access
-    const body = third(proc)
-    const extended = createScope(proc, args)
-    /* This is not executeSequence because there is unquoting involved. eg:
-        (defmacro let (bindings & body)
-            (def pairs (partition bindings 2))
-            (def definitions (map #(list 'def (get % 0) (get % 1)) pairs))
-            ->`(progn
-                ~definitions
-                ~@body)) */
-    return map(proc => evaluate(proc, extended), body).slice(-1)
+function expandMacro(macro, args){
+    const body = getMacroBody(macro)
+    const extended = createScope(macro, args)
+    return analyzeSequence(body)(extended)
 }
 
 function analyzeApplication(exp){
-    const operatorProc = analyze(getApplicationOperator(exp))
+    const operatorExec = analyze(getApplicationOperator(exp))
+    const operandsExec = map(analyze, getApplicationOperands(exp))
     return env => {
-        const proc = operatorProc(env)
-        if(isMacro(proc)){
+        const operator = operatorExec(env)
+        if(isMacro(operator)){
             const macroEnv = extendEnvironment(env) // macros have their own scope
             const args = getApplicationOperands(exp) // args are not analyzed
-            const expanded = expandMacro(proc, args)
-            return map(proc => evaluate(proc, macroEnv), expanded)
+            const expanded = expandMacro(operator, args)
+            return evaluate(expanded, macroEnv)
         }
 
-        // we're trading off arg evaluation efficiency for macros here
-        const operandsProc = map(analyze, getApplicationOperands(exp))
-        const args = map(proc => proc(env), operandsProc)
-        return executeProcedure(proc, args)
+        const args = map(proc => proc(env), operandsExec)
+        return executeProcedure(operator, args)
     }
 }
 
-function createScope(proc, args){
-    //@TODO factor arg destructuring into another function
-    const params = getProcedureParameters(proc)
-    const extended = extendEnvironment(getProcedureEnvironment(proc))
+function destructureArgs(params, args){
     const restIndex = params.indexOf('&')
     if(restIndex >= 0){
         const restArgs = args.slice(restIndex)
-        defineVariables(params.slice(0, restIndex), args.slice(0, restIndex), extended)
-        defineVariable(params[restIndex + 1], restArgs, extended)
-    } else {
-        defineVariables(params, args, extended)
+        outputParams = [...params.slice(0, restIndex), params[restIndex + 1]]
+        outputArgs = [...args.slice(0, restIndex), restArgs]
+        return [outputParams, outputArgs]
     }
-    return extended
+    return [params, args]
+}
+
+function createScope(proc, args){
+    let params = getProcedureParameters(proc)
+    ;[params, args] = destructureArgs(params, args)
+    const scope = extendEnvironment(getProcedureEnvironment(proc))
+    defineVariables(params, args, scope)
+    return scope
 }
 
 function executeProcedure(proc, args){
-    // proc argument can be either a function initially in the global environment (primitive procedure)
-    // or a compound procedure
     if(isCompoundProcedure(proc)){
         const scope = createScope(proc, args)
-        return getProcedureBody(proc)(scope)
+        return getProcedureBodyExecution(proc)(scope)
     }
-    if(isPrimitiveProcedure(proc)){
-        return executePrimitiveProcedure(proc, args)
+    if(isPrimitive(proc)){
+        return executePrimitive(proc, args)
     }
 }
 
-function executePrimitiveProcedure(proc, args){
-    //@TODO stop being lazy and abstract access
-    return second(proc)(args)
+function executePrimitive(primitive, args){
+    return getPrimitiveFunction(primitive)(args)
 }
 
 function executeSequence(procs, env) {
@@ -127,17 +128,15 @@ function executeSequence(procs, env) {
 }
 
 function analyzeSequence(exps){
-    const procs = map(analyze, exps)
-    if(isEmpty(procs)) wrong(`can't analyze empty sequence`)
-    return env => executeSequence(procs, env)
+    const executions = map(analyze, exps)
+    if(isEmpty(executions)) wrong(`can't analyze empty sequence`)
+    return env => executeSequence(executions, env)
 }
 
 function analyzeLambda(exp){
     const vars = getLambdaParameters(exp)
-    const bodyProcedure = analyzeSequence(getLambdaBody(exp))
-    // the procedure contains the environment in which the lambda was defined
-    // procedure packages args, body and environment
-    return env => makeProcedure(vars, bodyProcedure, env)
+    const bodyExec = analyzeSequence(getLambdaBody(exp))
+    return env => makeProcedure(vars, bodyExec, env)
 }
 
 function analyzeSelfEvaluating(exp){
@@ -166,7 +165,6 @@ function recursiveSyntaxUnquote(exps, env){
 }
 
 function analyzeSyntaxQuoted(exp){
-    // we assume it's a list
     return env => {
         const unquoted = unquote(exp)
         if(isAtom(unquoted)) return unquoted
@@ -185,7 +183,7 @@ function syntaxUnquote(exp, env){
 }
 
 function unquote(exp){
-    return second(exp) //@TODO: read?
+    return second(exp)
 }
 
 function analyzeVariable(exp){
@@ -194,31 +192,31 @@ function analyzeVariable(exp){
 
 function analyzeAssignment(exp){
     const variable = getAssignmentVariable(exp)
-    const proc = analyze(getAssignmentValue(exp))
-    return env => setVariable(variable, proc(env), env)
+    const exec = analyze(getAssignmentValue(exp))
+    return env => setVariable(variable, exec(env), env)
 }
 
 function analyzeDefinition(exp){
     const variable = getDefinitionVariable(exp)
-    const proc = analyze(getDefinitionValue(exp))
-    return env => defineVariable(variable, proc(env), env)
+    const exec = analyze(getDefinitionValue(exp))
+    return env => defineVariable(variable, exec(env), env)
 }
 
 function analyzeIf(exp){
-    const cproc = analyze(getIfCondition(exp))
-    const bproc = analyze(getIfBody(exp))
-    const eproc = getIfElseBody(exp) ? analyze(getIfElseBody(exp)) : undefined
+    const conditionExec = analyze(getIfCondition(exp))
+    const bodyExec = analyze(getIfBody(exp))
+    const elseExec = getIfElseBody(exp) ? analyze(getIfElseBody(exp)) : undefined
     return env => {
-        if(cproc(env)){
-            return bproc(env)
+        if(conditionExec(env)){
+            return bodyExec(env)
         } else {
-            if(eproc) return eproc(env)
+            if(elseExec) return elseExec(env)
         }
     }
 }
 
-function makeProcedure(parameters, body, env){
-    return ['procedure', parameters, body, env]
+function makeProcedure(parameters, bodyExecution, env){
+    return ['procedure', parameters, bodyExecution, env]
 }
 
 function makeMacro(parameters, body, env){
@@ -239,7 +237,11 @@ function getIfElseBody(exp){
     return fourth(exp)
 }
 
-function getProcedureBody(exp){
+function getPrimitiveFunction(exp){
+    return second(exp)
+}
+
+function getProcedureBodyExecution(exp){
     return third(exp)
 }
 
@@ -249,6 +251,10 @@ function getProcedureParameters(exp){
 
 function getProcedureEnvironment(exp){
     return fourth(exp)
+}
+
+function getMacroBody(exp){
+    return third(exp)
 }
 
 function getApplicationOperator(exp){
@@ -357,7 +363,7 @@ function isApplication(exp){
     return !isAtom(exp)
 }
 
-function isPrimitiveProcedure(exp){
+function isPrimitive(exp){
     return first(exp) === 'primitive'
 }
 
