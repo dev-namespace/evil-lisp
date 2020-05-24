@@ -6,13 +6,6 @@ const { lookupVariable,
         setVariable,
         extendEnvironment } = require('./environment')
 
-// @TODO The parser (analyzer) shouldn't return functions but an AST. evaluate should have a switch statement
-//       too to evaluate the AST given an environment. So analyze will become simpler and evaluate more complex
-// @TODO Compile: another switch statement that generates JS code (@TODO: using escodegen or manually?)
-// @TODO We can then choose to evaluate the AST or compile the AST
-// @TODO Execution as a data structure, run(Execution) -----> AST, not execution
-//   http://lisperator.net/pltut/compiler/js-codegen
-
 // DOMAIN NOTES
 // ================================
 // Atom         Not an s-expression
@@ -23,74 +16,126 @@ const { lookupVariable,
 // Procedure    Compound procedure: ['procedure', parameters, bodyExecution, env]
 // Primitive    Primitive procedure: ['primitive', function]
 
-function evaluate(exp, env){
-    const execution = analyze(exp)
-    if(!execution) return wrong(`can't analyze ${exp}`)
-    return execution(env)
+function parse(exp){
+    if(isSelfEvaluating(exp)) return parseSelfEvaluating(exp)
+    if(isVariable(exp)) return parseVariable(exp)
+    if(isQuoted(exp)) return parseQuoted(exp)
+    if(isSyntaxQuoted(exp)) return parseSyntaxQuoted(exp)
+    if(isAssignment(exp)) return parseAssignment(exp)
+    if(isDefinition(exp)) return parseDefinition(exp)
+    if(isIf(exp)) return parseIf(exp)
+    if(isLambda(exp)) return parseLambda(exp)
+    if(isProgn(exp)) return parseSequence(getPrognActions(exp))
+    if(isMacroDefinition(exp)) return parseMacroDefinition(exp)
+    if(isMacroExpansion(exp)) return parseMacroExpansion(exp) // has to go here?
+    if(isApplication(exp)) return parseApplication(exp)
 }
 
-function analyze(exp){
-    //@TODO: data-directed aproach so analyze can be modified from outside
-    if(isSelfEvaluating(exp)) return analyzeSelfEvaluating(exp)
-    if(isVariable(exp)) return analyzeVariable(exp)
-    if(isQuoted(exp)) return analyzeQuoted(exp)
-    if(isSyntaxQuoted(exp)) return analyzeSyntaxQuoted(exp)
-    if(isAssignment(exp)) return analyzeAssignment(exp)
-    if(isDefinition(exp)) return analyzeDefinition(exp)
-    if(isIf(exp)) return analyzeIf(exp)
-    //@TODO cond <- or should they be macros?
-    //@TODO let <- or should they be macros?
-    if(isLambda(exp)) return analyzeLambda(exp)
-    if(isProgn(exp)) return analyzeSequence(getPrognActions(exp))
-    if(isMacroDefinition(exp)) return analyzeMacroDefinition(exp)
-    if(isMacroExpansion(exp)) return analyzeMacroExpansion(exp) // has to go here?
-    if(isApplication(exp)) return analyzeApplication(exp)
+// Parse functions
+// ===============================================================
+function parseSelfEvaluating(exp){
+    if(isNumber(exp)) return { type: 'num', value: Number(exp)}
+    if(isString(exp)) return { type: 'str', value: exp.slice(1, -1)}
+    if(isBoolean(exp)) return { type: 'bool', value: isTrue(exp) ? true : false}
+}
+
+function parseVariable(exp){
+    return { type: 'var', value: exp}
+}
+
+function parseQuoted(exp){
+    let value = unquote(exp)
+    //@TODO not very convinced...
+    // if not an atom, return a list!
+    console.log('VALUE', value)
+    return { type: 'quote', value}
+}
+
+function parseAssignment(exp){
+    const variable = getAssignmentVariable(exp)
+    const value = parse(getAssignmentValue(exp))
+    return { type: 'assign', variable, value}
+}
+
+function parseDefinition(exp){
+    const variable = getDefinitionVariable(exp)
+    const value = parse(getDefinitionValue(exp))
+    return { type: 'definition', variable, value}
+}
+
+function parseIf(exp){
+    const condition = parse(getIfCondition(exp))
+    const body = parse(getIfBody(exp))
+    const elseBody = getIfElseBody(exp) ? parse(getIfElseBody(exp)) : undefined
+    return { type: 'if', condition, body, elseBody}
+}
+
+function parseSequence(exps){
+    const nodes = map(parse, exps)
+    if(isEmpty(exps)) wrong(`can't parse empty sequence`)
+    return { type: 'progn', nodes }
+}
+
+function parseLambda(exp){
+    const params = getLambdaParameters(exp)
+    const body = parseSequence(getLambdaBody(exp))
+    return { type: 'lambda', params, body}
+}
+
+function parseApplication(exp){
+    const operator = parse(getApplicationOperator(exp))
+    const operands = map(parse, getApplicationOperands(exp))
+    // @TODO kind? primitive, macro, etc.
+    // @TODO not very convinced about _exp, all should have it?
+    return { type: 'application', operator, operands, _exp: exp}
+
+    // return env => {
+    //     const operator = operatorExec(env)
+    //     if(isMacro(operator)){
+    //         const macroEnv = extendEnvironment(env) // macros have their own scope
+    //         const args = getApplicationOperands(exp) // args are not analyzed
+    //         const expanded = expandMacro(operator, args)
+    //         return evaluate(expanded, macroEnv)
+    //     }
+
+    //     const args = map(proc => proc(env), operandsExec)
+    //     return executeProcedure(operator, args)
+    // }
+}
+
+function parseMacroDefinition(exp){
+    const name = second(exp)
+    const params = third(exp)
+    const body = map(parse, rest(rest(rest(exp))))
+
+    return { type: 'macrodefinition', name, params, body}
+    // return env => {
+    //     const macro = makeMacro(params, body, env)
+    //     defineVariable(name, macro, env)
+    //     return macro
+    // }
+}
+
+function parseMacroExpansion(exp){
+    const macroCallExp = unquote(second(exp))
+    // const operatorExec = analyze(getApplicationOperator(macroCallExp))
+    operator = parse(getApplicationOperator(macroCallExp))
+    const args = getApplicationOperands(macroCallExp) // args are not analyzed
+    return { type: 'macroexpansion', operator, args}
+    // return env => {
+    //     const macro = operatorExec(env)
+    //     return unread(expandMacro(macro, args))
+    // }
 }
 
 // Analyze functions
 // ===============================================================
-function analyzeMacroDefinition(exp){
-    const name = second(exp)
-    const params = third(exp)
-    const body = rest(rest(rest(exp)))
-    return env => {
-        const macro = makeMacro(params, body, env)
-        defineVariable(name, macro, env)
-        return macro
-    }
-}
 
-function analyzeMacroExpansion(exp){
-    const macroCallExp = unquote(second(exp))
-    const operatorExec = analyze(getApplicationOperator(macroCallExp))
-    const args = getApplicationOperands(macroCallExp) // args are not analyzed
-    return env => {
-        const macro = operatorExec(env)
-        return unread(expandMacro(macro, args))
-    }
-}
 
 function expandMacro(macro, args){
     const body = getMacroBody(macro)
     const extended = createScope(macro, args)
     return analyzeSequence(body)(extended)
-}
-
-function analyzeApplication(exp){
-    const operatorExec = analyze(getApplicationOperator(exp))
-    const operandsExec = map(analyze, getApplicationOperands(exp))
-    return env => {
-        const operator = operatorExec(env)
-        if(isMacro(operator)){
-            const macroEnv = extendEnvironment(env) // macros have their own scope
-            const args = getApplicationOperands(exp) // args are not analyzed
-            const expanded = expandMacro(operator, args)
-            return evaluate(expanded, macroEnv)
-        }
-
-        const args = map(proc => proc(env), operandsExec)
-        return executeProcedure(operator, args)
-    }
 }
 
 function destructureArgs(params, args){
@@ -134,34 +179,6 @@ function executeSequence(procs, env) {
     }
 }
 
-function analyzeSequence(exps){
-    const executions = map(analyze, exps)
-    if(isEmpty(executions)) wrong(`can't analyze empty sequence`)
-    return env => executeSequence(executions, env)
-}
-
-function analyzeLambda(exp){
-    const vars = getLambdaParameters(exp)
-    const bodyExec = analyzeSequence(getLambdaBody(exp))
-    return env => makeProcedure(vars, bodyExec, env)
-}
-
-function analyzeSelfEvaluating(exp){
-    let evaluation
-    if(isNumber(exp)) evaluation = Number(exp)
-    if(isBoolean(exp)) evaluation = isTrue(exp) ? true : false
-    if(isString(exp)) evaluation = exp.slice(1, -1)
-
-
-    // @TODO example of compilation
-    // return {
-    //     'type': 'Literal',
-    //     'value': evaluation
-    // }
-
-    return env => evaluation
-}
-
 function recursiveSyntaxUnquote(exps, env){
     let output = []
     for(let exp of exps){
@@ -179,18 +196,14 @@ function recursiveSyntaxUnquote(exps, env){
     return output
 }
 
-function analyzeSyntaxQuoted(exp){
-    return env => {
-        const unquoted = unquote(exp)
-        if(isAtom(unquoted)) return unquoted
-        const result = recursiveSyntaxUnquote(unquoted, env)
-        return result
-    }
-}
-
-function analyzeQuoted(exp){
-    const unquoted = unquote(exp)
-    return env => unquoted
+function parseSyntaxQuoted(exp){
+    return { type: 'syntaxquote', value: unquote(exp)}
+    // return env => {
+    //     const unquoted = unquote(exp)
+    //     if(isAtom(unquoted)) return unquoted
+    //     const result = recursiveSyntaxUnquote(unquoted, env)
+    //     return result
+    // }
 }
 
 function syntaxUnquote(exp, env){
@@ -199,57 +212,6 @@ function syntaxUnquote(exp, env){
 
 function unquote(exp){
     return second(exp)
-}
-
-function analyzeVariable(exp){
-    //@TODO how do I solve this?
-    //@TODO example of execution data
-    // const execution = {
-    //     'type': 'variableDefinition',
-    //     'name': variable,
-    //     'value': lookupVariable() //@TODO
-    // }
-    return env => lookupVariable(exp, env)
-}
-
-function analyzeAssignment(exp){
-    const variable = getAssignmentVariable(exp)
-    const exec = analyze(getAssignmentValue(exp))
-    return env => setVariable(variable, exec(env), env)
-}
-
-function analyzeDefinition(exp){
-    const variable = getDefinitionVariable(exp)
-    const exec = analyze(getDefinitionValue(exp))
-    debugger
-    //@TODO example of execution data
-    // const execution = {
-    //     'type': 'variableDefinition',
-    //     'name': variable,
-    //     'value': {
-    //         'type': 'Literal',
-    //         'value': 3
-    //     }
-    // }
-
-    // function run(exec, env){
-    //     return defineVariable(exec.variable, run(exec.value, env))
-    // }
-
-    return env => defineVariable(variable, exec(env), env)
-}
-
-function analyzeIf(exp){
-    const conditionExec = analyze(getIfCondition(exp))
-    const bodyExec = analyze(getIfBody(exp))
-    const elseExec = getIfElseBody(exp) ? analyze(getIfElseBody(exp)) : undefined
-    return env => {
-        if(conditionExec(env)){
-            return bodyExec(env)
-        } else {
-            if(elseExec) return elseExec(env)
-        }
-    }
 }
 
 function makeProcedure(parameters, bodyExecution, env){
@@ -468,4 +430,4 @@ function wrong(error){
     return error
 }
 
-module.exports = { evaluate, analyze, executeProcedure }
+module.exports = { parse, isAtom, isUnquoted, isUnquoteSliced }

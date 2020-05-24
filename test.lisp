@@ -1,76 +1,50 @@
-(def x 6)
-(def y 5)
+(print "[*] File read working")
 
 (def suma (lambda (a b)
-            (def z 10000)
-            (+ a (+ b z))))
+            (+ 0 0)
+            (+ 1 2)))
 
-(def result (suma x y))
+(print "[*] Lambdas working: 1 + 2 = " (suma 1 2))
 
-(print "result: " result)
+(def fib (lambda (n)
+           (if (< n 2)
+               n
+               (+ (fib (- n 1)) (fib (- n 2))))))
 
-(if (not (not true))
-    (print result)
-    (print 1000))
+;; (print (fib 10))
 
-(print "unkuoted" '`(progn
-    (print ~greeting)
-    (print ~departure)))
+(print "prognres" (progn
+  (print "1")
+  (print "1")
+  (print (list (list 1 2) 3))
+  100))
 
-(defmacro greet (greeting departure)
-  `(progn
-    (print ~greeting)
-    (print ~departure)))
+(print '(1 2 3))
+
 
 (defmacro unless (pred a b)
   `(if (not ~pred) ~a ~b))
 
-(def z 3)
-
-(print "expansion1:" (macroexpand '(unless true
-  (print "will print")
-  (print "won't print"))))
-
-(print "expansion2:" (macroexpand '(greet
- z
- :bye)))
-
-(print "==================================================================")
-(print "==================================================================")
-(print "==================================================================")
-(print "==================================================================")
-(print "==================================================================")
-
-
-(def suma (lambda (a b)
-            (def z 10000)
-            (+ a (+ b z))))
-
-(def result (suma 40 20))
-(print "lambdas work fine" result)
-
-(defmacro unless (pred a b)
-  `(if (not ~pred) ~a ~b))
-
-;; @TODO cannot move definitions below and unquote it
 (defmacro let (bindings & body)
   (def pairs (partition bindings 2))
   (def definitions (map #(list 'def (get % 0) (get % 1)) pairs))
   `(progn
-     ~definitions
+     ~@definitions
      ~@body))
 
-(print "expansion works:" (macroexpand '(let (z 3)
-               (print z))))
+;; (print (macroexpand '(unless true (print "hola") (print "adios"))))
+
+;; (print "expansion works:" (macroexpand '(let (z 3)
+;;                (print z))))
+
+(print (macroexpand '(let (a 10
+      b 20)
+  (print "let works" a)
+  (print "this works too" b))))
 
 (let (a 10
       b 20)
   (print "let works" a)
-  (print "this works too" b)) ;3
+  (print "for multiple parameters" b)) ;3
 
-(print `hola)
-
-
-(progn
-  (print "hola")
-  `(print "hola"))
+(unless false (print "unless works"))

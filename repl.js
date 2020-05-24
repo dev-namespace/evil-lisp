@@ -1,6 +1,10 @@
 const { createEnvironment, defineVariable } = require('./environment')
 const primitives = require('./primitives')
-const { evaluate } = require('./interpreter')
+// const { evaluate } = require('./interpreter')
+const { format } = require('./naming')
+const { evaluate } = require('./evaluator')
+const { compile } = require('./compiler')
+const { parse } = require('./parser')
 const { read, InputStream } = require('./reader')
 const readline = require("readline")
 
@@ -9,6 +13,10 @@ const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
 })
+
+function pprint(msg){
+    console.log(JSON.stringify(msg, null, 2))
+}
 
 function prompt(question){
     return new Promise((resolve, reject) => {
@@ -28,15 +36,51 @@ function createGlobalEnvironment(){
     return env
 }
 
+function compilePrimitive(primitive){
+    return primitive[1].toString()
+}
+
+function createCompilationPrefix(){
+    let output = ''
+    for(let primitive of primitives){
+        output += compilePrimitive(primitive) + ';\n'
+    }
+    return output
+}
+
 async function launch(){
     const env = createGlobalEnvironment()
+    const prefix = createCompilationPrefix()
 
     while(!quit){
         try{
             const input = await prompt('> ')
             if(quit) break
-            const result = evaluate(read(InputStream(input)), env)
+            const ast = parse(read(InputStream(input)), env)
+            console.log("")
+            console.log("")
+            console.log("")
+            console.log("AST")
+            console.log("================================")
+            pprint(ast)
+
+            console.log("")
+            console.log("COMPILATION")
+            console.log("================================")
+            const result = prefix + '\n' + compile(ast)
             console.log(result)
+
+            // const result = evaluate(ast, env)
+            console.log("")
+            console.log("EVALUATION")
+            console.log("================================")
+            console.log(evaluate(ast, env))
+
+            console.log("")
+            console.log("JS EVAL")
+            console.log("================================")
+            console.log(eval(result))
+
         } catch(err){
             console.log(err)
         }

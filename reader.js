@@ -87,13 +87,14 @@ function read(input){
 
 function unread(exp){
     let result = ""
-    for(let token of exp){
-        if(Array.isArray(token)){
-            result += '('
+    if(Array.isArray(exp)){
+        result += '('
+        for(let token of exp){
             result += unread(token)
-            result += ')'
         }
-        else result += token + ' '
+        result += ')'
+    } else {
+        result += exp + ' '
     }
     return result
 }

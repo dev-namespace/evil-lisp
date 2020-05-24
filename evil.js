@@ -1,6 +1,7 @@
 const { createEnvironment, defineVariable } = require('./environment')
 const primitives = require('./primitives')
-const { evaluate } = require('./interpreter')
+const { parse } = require('./parser')
+const { evaluate } = require('./evaluator')
 const { read, InputStream } = require('./reader')
 const fs = require('fs')
 
@@ -21,4 +22,6 @@ content = content.replace(/\n/g, " ")
 const input = `(progn ${content})`
 
 const env = createGlobalEnvironment()
-evaluate(read(InputStream(input)), env)
+
+const ast = parse(read(InputStream(input)), env)
+evaluate(ast, env)
