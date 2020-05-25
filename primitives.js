@@ -48,7 +48,10 @@ function get(seq, accessor){
 // const assoc = ([coll, k, v]) => {coll[k] = v; return coll}
 // const obj = () => ({})
 // const list = (args) => args
-// const dot = ([key, coll, ...args]) => coll[key](...args)
+function dot(key, coll, ...args){
+    return coll[key](...args)
+}
+
 function map(func, coll){
     return coll.map(func)
 }
@@ -91,7 +94,7 @@ const primitives = [
     // primitive('assoc', assoc),
     // primitive('obj', obj),
     primitive('list', list),
-    // primitive('.', dot),
+    primitive('.', dot),
     primitive('map', map),
     // primitive('filter', filter),
     // primitive('reduce', reduce),

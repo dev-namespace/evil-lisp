@@ -1,9 +1,9 @@
-
 const substitutions = {
     '+': 'add',
     '-': 'sub',
     '>': 'gt',
     '<': 'lt',
+    '.': 'dot',
 }
 
 function format(name){

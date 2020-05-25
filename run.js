@@ -1,3 +1,5 @@
+const { createEnvironment, defineVariable } = require('./environment')
+const primitives = require('./primitives')
 const { compile, createCompilationPrefix } = require('./compiler')
 const { parse } = require('./parser')
 const { read, InputStream } = require('./reader')
@@ -14,9 +16,33 @@ content = content.replace(/\r\n/g, " ")
 content = content.replace(/\n/g, " ")
 const input = `(progn ${content})`
 
-const ast = parse(read(InputStream(input)))
-const compilation = createCompilationPrefix() + compile(ast)
+//@ TODO createCompilationEnvironment instead
+function createGlobalEnvironment(){
+    const env = createEnvironment()
+    for(let primitive of primitives){
+        defineVariable(primitive[0], primitive[1], env)
+    }
+    defineVariable('console', console, env)
+    return env
+}
+
+console.time('read')
+const env = createGlobalEnvironment()
+const r = read(InputStream(input))
+console.timeEnd('read')
+console.time('parse')
+const ast = parse(r)
+console.timeEnd('parse')
+console.time('compile')
+const compilation = createCompilationPrefix() + compile(ast, env)
+console.timeEnd('compile')
+console.log('')
+console.log('COMPILATION OUTPUT')
+console.log('=================================')
 console.log(`(function(){${compilation}}())`)
+
+console.log('')
+console.log('JS EVAL')
 console.log('=================================')
 console.time('eval')
 eval(`(function(){${compilation}}())`) //@TODO where to put this

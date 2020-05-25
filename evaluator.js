@@ -6,8 +6,6 @@ const { lookupVariable,
         setVariable,
         extendEnvironment } = require('./environment')
 
-//@TODO quoting
-
 function evaluate(node, env){
     switch (node.type){
         case "num":
@@ -19,6 +17,7 @@ function evaluate(node, env){
         case "assignment": return evaluateAssignment(node, env)
         case "definition": return evaluateDefinition(node, env)
         case "if": return evaluateIf(node, env)
+        case "let": return evaluateLet(node, env)
         case "lambda": return evaluateLambda(node, env)
         case "progn": return evaluateProgn(node, env)
         case "macrodefinition": return evaluateMacroDefinition(node, env)
@@ -49,6 +48,14 @@ function evaluateIf(node, env){
     }
 }
 
+function evaluateLet(node, env){
+    const scope = extendEnvironment(env)
+    for(let binding of node.bindings){
+        evaluate({type: 'definition', variable: binding[0], value: binding[1]}, scope)
+    }
+    return evaluate(node.body, scope)
+}
+
 function evaluateProgn(node, env){
     return node.nodes.map(n => evaluate(n, env)).slice(-1)[0]
 }
@@ -64,7 +71,6 @@ function evaluateLambda(node, env){
 }
 
 function evaluateApplication(node, env){
-    //@TODO do we need 'primitive' in the operator or just a func?
     const operator = evaluate(node.operator, env)
     if(isMacro(operator)){
         const macro = evaluate(node.operator, env)
@@ -75,7 +81,6 @@ function evaluateApplication(node, env){
 
     const args = node.operands.map(operand => evaluate(operand, env))
     return operator(...args)
-    //@TODO evaluate macro generated function
 }
 
 function evaluateMacroDefinition(node, env){
@@ -94,20 +99,14 @@ function evaluateSyntaxQuote(node, env){
     return result
 }
 
-
 // Helpers
 // ===============================================================
-//
 function expandMacro(macro, args, env){
     const body = getMacroBody(macro)
     const params = getMacroParams(macro)
     const scope = createScope(params, args, env)
     const expanded =  body.map(n => evaluate(n, scope)).slice(-1)[0]
     return [expanded, scope]
-}
-
-function getMacroApplicationArgs(node){
-    return node.operands
 }
 
 function makeMacro(parameters, body){
@@ -165,4 +164,4 @@ function destructureArgs(params, args){
     return [params, args]
 }
 
-module.exports = { evaluate }
+module.exports = { evaluate, evaluateMacroDefinition, expandMacro, isMacro }

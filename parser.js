@@ -1,20 +1,10 @@
-const { unread } = require('./reader')
 const { isSurroundedBy } = require('./utils')
-const { lookupVariable,
-        defineVariable,
-        defineVariables,
-        setVariable,
-        extendEnvironment } = require('./environment')
 
 // DOMAIN NOTES
 // ================================
 // Atom         Not an s-expression
 // Expression   S-expression or atom
-// Analyze      Given an expression, generates the pertinent execution function
-// Execution    Does what analysis determined should be done taking environment into account
-// Evaluation   Analysis + execution
-// Procedure    Compound procedure: ['procedure', parameters, bodyExecution, env]
-// Primitive    Primitive procedure: ['primitive', function]
+// Parse        Given an expression, returns AST
 
 function parse(exp){
     if(isSelfEvaluating(exp)) return parseSelfEvaluating(exp)
@@ -24,6 +14,7 @@ function parse(exp){
     if(isAssignment(exp)) return parseAssignment(exp)
     if(isDefinition(exp)) return parseDefinition(exp)
     if(isIf(exp)) return parseIf(exp)
+    if(isLet(exp)) return parseLet(exp)
     if(isLambda(exp)) return parseLambda(exp)
     if(isProgn(exp)) return parseSequence(getPrognActions(exp))
     if(isMacroDefinition(exp)) return parseMacroDefinition(exp)
@@ -45,9 +36,6 @@ function parseVariable(exp){
 
 function parseQuoted(exp){
     let value = unquote(exp)
-    //@TODO not very convinced...
-    // if not an atom, return a list!
-    console.log('VALUE', value)
     return { type: 'quote', value}
 }
 
@@ -70,6 +58,15 @@ function parseIf(exp){
     return { type: 'if', condition, body, elseBody}
 }
 
+function parseLet(exp){
+    const bindingArr = getLetBindings(exp)
+    const body = parseSequence(getLetBody(exp))
+    const vars = map(first, bindingArr)
+    const values = map(parse, map(second, bindingArr))
+    const bindings = zip(vars, values)
+    return { type: 'let', bindings, vars, values, body}
+}
+
 function parseSequence(exps){
     const nodes = map(parse, exps)
     if(isEmpty(exps)) wrong(`can't parse empty sequence`)
@@ -83,24 +80,10 @@ function parseLambda(exp){
 }
 
 function parseApplication(exp){
+    // @TODO not very convinced about _exp, all should have it?
     const operator = parse(getApplicationOperator(exp))
     const operands = map(parse, getApplicationOperands(exp))
-    // @TODO kind? primitive, macro, etc.
-    // @TODO not very convinced about _exp, all should have it?
     return { type: 'application', operator, operands, _exp: exp}
-
-    // return env => {
-    //     const operator = operatorExec(env)
-    //     if(isMacro(operator)){
-    //         const macroEnv = extendEnvironment(env) // macros have their own scope
-    //         const args = getApplicationOperands(exp) // args are not analyzed
-    //         const expanded = expandMacro(operator, args)
-    //         return evaluate(expanded, macroEnv)
-    //     }
-
-    //     const args = map(proc => proc(env), operandsExec)
-    //     return executeProcedure(operator, args)
-    // }
 }
 
 function parseMacroDefinition(exp){
@@ -109,117 +92,21 @@ function parseMacroDefinition(exp){
     const body = map(parse, rest(rest(rest(exp))))
 
     return { type: 'macrodefinition', name, params, body}
-    // return env => {
-    //     const macro = makeMacro(params, body, env)
-    //     defineVariable(name, macro, env)
-    //     return macro
-    // }
 }
 
 function parseMacroExpansion(exp){
     const macroCallExp = unquote(second(exp))
-    // const operatorExec = analyze(getApplicationOperator(macroCallExp))
-    operator = parse(getApplicationOperator(macroCallExp))
+    const operator = parse(getApplicationOperator(macroCallExp))
     const args = getApplicationOperands(macroCallExp) // args are not analyzed
     return { type: 'macroexpansion', operator, args}
-    // return env => {
-    //     const macro = operatorExec(env)
-    //     return unread(expandMacro(macro, args))
-    // }
-}
-
-// Analyze functions
-// ===============================================================
-
-
-function expandMacro(macro, args){
-    const body = getMacroBody(macro)
-    const extended = createScope(macro, args)
-    return analyzeSequence(body)(extended)
-}
-
-function destructureArgs(params, args){
-    const restIndex = params.indexOf('&')
-    if(restIndex >= 0){
-        const restArgs = args.slice(restIndex)
-        outputParams = [...params.slice(0, restIndex), params[restIndex + 1]]
-        outputArgs = [...args.slice(0, restIndex), restArgs]
-        return [outputParams, outputArgs]
-    }
-    return [params, args]
-}
-
-function createScope(proc, args){
-    let params = getProcedureParameters(proc)
-    ;[params, args] = destructureArgs(params, args)
-    const scope = extendEnvironment(getProcedureEnvironment(proc))
-    defineVariables(params, args, scope)
-    return scope
-}
-
-function executeProcedure(proc, args){
-    if(isCompoundProcedure(proc)){
-        const scope = createScope(proc, args)
-        return getProcedureBodyExecution(proc)(scope)
-    }
-    if(isPrimitive(proc)){
-        return executePrimitive(proc, args)
-    }
-}
-
-function executePrimitive(primitive, args){
-    return getPrimitiveFunction(primitive)(args)
-}
-
-function executeSequence(procs, env) {
-    if(isLast(procs)) return first(procs)(env)
-    else {
-        first(procs)(env)
-        return executeSequence(rest(procs), env)
-    }
-}
-
-function recursiveSyntaxUnquote(exps, env){
-    let output = []
-    for(let exp of exps){
-        if(!isAtom(exp)) {
-            if(isUnquoted(exp)){
-                output.push(syntaxUnquote(exp, env))
-            } else if(isUnquoteSliced(exp)){
-                output.push(...syntaxUnquote(exp, env))
-            } else {
-                output.push(recursiveSyntaxUnquote(exp, env))
-            }
-        }
-        else output.push(exp)
-    }
-    return output
 }
 
 function parseSyntaxQuoted(exp){
     return { type: 'syntaxquote', value: unquote(exp)}
-    // return env => {
-    //     const unquoted = unquote(exp)
-    //     if(isAtom(unquoted)) return unquoted
-    //     const result = recursiveSyntaxUnquote(unquoted, env)
-    //     return result
-    // }
-}
-
-function syntaxUnquote(exp, env){
-    return evaluate(second(exp), env)
 }
 
 function unquote(exp){
     return second(exp)
-}
-
-function makeProcedure(parameters, bodyExecution, env){
-    return ['procedure', parameters, bodyExecution, env]
-}
-
-function makeMacro(parameters, body, env){
-    return [ 'macro', parameters, body, env ]
 }
 
 // Getters
@@ -236,24 +123,12 @@ function getIfElseBody(exp){
     return fourth(exp)
 }
 
-function getPrimitiveFunction(exp){
-    return second(exp)
+function getLetBindings(exp){
+    return partition(second(exp), 2)
 }
 
-function getProcedureBodyExecution(exp){
-    return third(exp)
-}
-
-function getProcedureParameters(exp){
-    return second(exp)
-}
-
-function getProcedureEnvironment(exp){
-    return fourth(exp)
-}
-
-function getMacroBody(exp){
-    return third(exp)
+function getLetBody(exp){
+    return rest(rest(exp))
 }
 
 function getApplicationOperator(exp){
@@ -350,6 +225,10 @@ function isIf(exp){
     return first(exp) === 'if'
 }
 
+function isLet(exp){
+    return first(exp) === 'let'
+}
+
 function isLambda(exp){
     return first(exp) === 'lambda' || first(exp) === 'fn'
 }
@@ -362,24 +241,12 @@ function isApplication(exp){
     return !isAtom(exp)
 }
 
-function isPrimitive(exp){
-    return first(exp) === 'primitive'
-}
-
-function isCompoundProcedure(exp){
-    return first(exp) === 'procedure'
-}
-
 function isMacroDefinition(exp){
     return first(exp) === 'defmacro'
 }
 
 function isMacroExpansion(exp){
     return first(exp) === 'macroexpand'
-}
-
-function isMacro(exp){
-    return first(exp) === 'macro'
 }
 
 function isTrue(exp){
@@ -422,6 +289,19 @@ function isEmpty(seq){
 
 function map(func, seq){
     return seq.map(func)
+}
+
+function partition(seq, size) {
+    seq = [...seq]
+    const output = []
+    while(seq.length > 0){
+        output.push(seq.splice(0, size))
+    }
+    return output
+}
+
+function zip(a, b){
+    return a.map((e, i) => [e, b[i]])
 }
 
 // Misc.

@@ -11,7 +11,7 @@
                n
                (+ (fib (- n 1)) (fib (- n 2))))))
 
-;; (print (fib 10))
+ (print "fib10: " (fib 10))
 
 (print "prognres" (progn
   (print "1")
@@ -21,30 +21,18 @@
 
 (print '(1 2 3))
 
-
 (defmacro unless (pred a b)
   `(if (not ~pred) ~a ~b))
 
-(defmacro let (bindings & body)
-  (def pairs (partition bindings 2))
-  (def definitions (map #(list 'def (get % 0) (get % 1)) pairs))
-  `(progn
-     ~@definitions
-     ~@body))
+(print (macroexpand '(unless true (print "hola") (print "adios"))))
 
-;; (print (macroexpand '(unless true (print "hola") (print "adios"))))
-
-;; (print "expansion works:" (macroexpand '(let (z 3)
-;;                (print z))))
-
-(print (macroexpand '(let (a 10
-      b 20)
-  (print "let works" a)
-  (print "this works too" b))))
+(unless false (print "unless works"))
 
 (let (a 10
       b 20)
   (print "let works" a)
   (print "for multiple parameters" b)) ;3
 
-(unless false (print "unless works"))
+
+(. :log console "interop works")
+(print '1)
