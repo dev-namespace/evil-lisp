@@ -1,7 +1,11 @@
-const { executeProcedure } = require('./interpreter')
-
 // @TODO: optimize, hardcode parameters until 5 or 6, if more use reduce
-const primitive = (key, func) => ([key, func])
+// const primitive = (key, func) => ([key, func])
+
+function primitive(key, func){
+    // Object.defineProperty(func, "name", { value: `__EVP__${func.name}`});
+    return [key, func]
+}
+
 function add(...args){
     return args.reduce((acc, x) => acc + x, 0)
 }
@@ -103,4 +107,7 @@ const primitives = [
 ]
 
 
-module.exports = primitives
+const assoc = (o, k, v) => {o[k] = v; return o}
+const __primitives = primitives.reduce((acc, x) => assoc(acc, x[0], x[1]), {})
+
+module.exports = { primitives, __primitives }

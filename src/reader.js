@@ -14,7 +14,6 @@ const macroCharacters = {
         let token = readWhile(input, char => !isWhitespace(char) && !isTerminatingMacro(char))
 
         // (. log console "foo")
-        console.log('token:', token)
         if(token === ""){
             return '.'
         }

@@ -1,3 +1,6 @@
+(def utils (require "./utils.evl"))
+(def proxy (require "./proxy.evl"))
+
 (print "[*] File read working")
 
 (def suma (lambda (a b)
@@ -21,12 +24,8 @@
 
 (print '(1 2 3))
 
-(defmacro unless (pred a b)
-  `(if (not ~pred) ~a ~b))
-
 (print (macroexpand '(unless true (print "hola") (print "adios"))))
 
-(unless false (print "unless works"))
 
 (let (a 10
       b 20)
@@ -36,3 +35,10 @@
 
 (. :log console "interop works")
 (print '1)
+
+
+(print "REQRES:" utils)
+
+(utils/fooMethod)
+
+(unless false (print "unless works"))

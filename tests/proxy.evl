@@ -1,0 +1,3 @@
+(def utils (require "./utils.evl"))
+
+(utils/fooMethod)

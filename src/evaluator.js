@@ -6,6 +6,8 @@ const { lookupVariable,
         setVariable,
         extendEnvironment } = require('./environment')
 
+// @TODO: check how last compilation changes apply
+
 function evaluate(node, env){
     switch (node.type){
         case "num":
@@ -73,9 +75,8 @@ function evaluateLambda(node, env){
 function evaluateApplication(node, env){
     const operator = evaluate(node.operator, env)
     if(isMacro(operator)){
-        const macro = evaluate(node.operator, env)
         const args = node._exp.slice(1) //@TODO abstract
-        const [expanded, scope] = expandMacro(macro, args, env)
+        const [expanded, scope] = expandMacro(operator, args, env)
         return evaluate(parse(expanded), scope)
     }
 

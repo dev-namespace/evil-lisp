@@ -39,7 +39,7 @@ console.timeEnd('compile')
 console.log('')
 console.log('COMPILATION OUTPUT')
 console.log('=================================')
-console.log(`(function(){${compilation}}())`)
+console.log(`${compilation}`)
 
 console.log('')
 console.log('JS EVAL')

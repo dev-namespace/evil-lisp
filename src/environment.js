@@ -7,6 +7,9 @@ Environment.prototype = {
     extend: function(){
         return new Environment(this)
     },
+    getRootEnvironment: function(){
+        return this.parent && this.parent.getRootEnvironment ? this.parent.getRootEnvironment() : this
+    },
     lookup: function(name){
         if(name in this.vars) return this.vars[name]
         throw new Error(`Undefined variable ${name}`)

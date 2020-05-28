@@ -1,0 +1,17 @@
+(print "Evaluating utils")
+
+(defmacro unless (pred a b)
+  `(if (not ~pred) ~a ~b))
+
+(print "LETRES:" (let (foo "utility variable")
+  (print "from utils:")
+  (print foo)
+  23))
+
+(def fooMethod
+     (lambda ()
+       (print "foo method call")))
+
+(def fooVar "foovar")
+
+(fooMethod)
