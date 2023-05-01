@@ -1,4 +1,4 @@
-export function verboseCompiledEvaluation(ast, compilation, evaluationFunc) {
+function verboseCompiledEvaluation(ast, compilation, evaluationFunc) {
   console.log("\n\n\nAST");
   console.log("================================");
   pprint(ast);
@@ -10,4 +10,8 @@ export function verboseCompiledEvaluation(ast, compilation, evaluationFunc) {
   console.log("\nJS EVAL");
   console.log("================================");
   console.log(evaluationFunc());
+}
+
+module.exports = {
+  verboseCompiledEvaluation: verboseCompiledEvaluation
 }

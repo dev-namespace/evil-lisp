@@ -11,4 +11,10 @@ function recursiveMap(func, array){
     return output
 }
 
-module.exports = { isSurroundedBy, recursiveMap }
+function attempt(func){
+    try {
+        func()
+    } catch (err) {}
+}
+
+module.exports = { isSurroundedBy, recursiveMap, attempt }

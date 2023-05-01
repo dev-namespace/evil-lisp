@@ -1,7 +1,8 @@
 const { format } = require("./naming");
 const { unread } = require("./reader");
 const { parse } = require("./parser");
-const { safeLookup } = require("./environment");
+const { attempt } = require("./utils");
+const { safeLookup, createEnvironment, defineVariable } = require("./environment");
 const {
   evaluateMacroDefinition,
   evaluate,
@@ -116,6 +117,7 @@ function compileApplication(node, env) {
 }
 
 // =======================================================
+
 function compilePrimitive(primitive) {
   return primitive[1].toString();
 }
@@ -128,4 +130,16 @@ function createCompilationPrefix() {
   return output;
 }
 
-module.exports = { compile, createCompilationPrefix };
+function createCompilationEnvironment(){
+
+  const env = createEnvironment();
+  for (let primitive of primitives) {
+    defineVariable(primitive[0], primitive[1], env);
+  }
+  defineVariable("console", console, env);
+  attempt(() => defineVariable("window", window, env));
+  attempt(() => defineVariable("global", global, env));
+  return env;
+}
+
+module.exports = { compile, createCompilationPrefix, createCompilationEnvironment };

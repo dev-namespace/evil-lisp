@@ -1,8 +1,3 @@
-// const { executeProcedure } = require('./interpreter')
-
-// @TODO: optimize, hardcode parameters until 5 or 6, if more use reduce
-const primitive = (key, func) => [key, func];
-
 function add(...args) {
   return args.reduce((acc, x) => acc + x, 0);
 }
@@ -73,6 +68,8 @@ function partition(coll, size) {
   }
   return output;
 }
+
+const primitive = (key, func) => [key, func];
 
 const primitives = [
   primitive("+", add),

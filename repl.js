@@ -2,16 +2,13 @@ const { createEnvironment, defineVariable } = require("./environment");
 const primitives = require("./primitives");
 const { format } = require("./naming");
 const { evaluate } = require("./evaluator");
-const { compile } = require("./compiler");
+const { compile, createCompilationEnvironment, createCompilationPrefix } = require("./compiler");
 const { parse } = require("./parser");
 const { read, InputStream } = require("./reader");
 const readline = require("readline");
 
 let quit = false;
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
+let rl
 
 function pprint(msg) {
   console.log(JSON.stringify(msg, null, 2));
@@ -26,29 +23,21 @@ function prompt(question) {
   });
 }
 
-function createGlobalEnvironment() {
-  const env = createEnvironment();
-  for (let primitive of primitives) {
-    defineVariable(primitive[0], primitive[1], env);
+function compileAndEval(ast, env, prefix){
+  const compilation = prefix + "\n" + compile(ast, env);
+  if (process.argv.debug) {
+    return verboseCompiledEvaluation(ast, compilation, () => eval(compilation));
+  } else {
+    return eval(compilation);
   }
-  defineVariable("console", console, env);
-  return env;
 }
 
-function compilePrimitive(primitive) {
-  return primitive[1].toString();
-}
+async function repl(env, debug = false) {
+  rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
 
-function createCompilationPrefix() {
-  let output = "";
-  for (let primitive of primitives) {
-    output += compilePrimitive(primitive) + ";\n";
-  }
-  return output;
-}
-
-async function launch(debug = false) {
-  const env = createGlobalEnvironment();
   const prefix = createCompilationPrefix();
 
   while (!quit) {
@@ -56,16 +45,15 @@ async function launch(debug = false) {
       const input = await prompt("> ");
       if (quit) break;
       const ast = parse(read(InputStream(input)), env);
-      const compilation = prefix + "\n" + compile(ast, env);
-      // console.log("argv2", argv);
-      if (argv.debug) {
-        verboseCompiledEvaluation(ast, compilation, () => eval(compilation));
-      } else {
-        eval(compilation);
-      }
+      const result = compileAndEval(ast, env, prefix)
+      console.log(result)
     } catch (err) {
       console.log(err);
     }
   }
   rl.close();
+}
+
+module.exports = {
+  repl
 }
