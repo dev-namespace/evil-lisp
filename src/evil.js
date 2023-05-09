@@ -15,11 +15,11 @@ const debugMode = process.argv.debug;
 const compiledEval = process.argv.compiledEval;
 const env = createCompilationEnvironment();
 
-// if(sourceFile) {
-//   evalFile(sourceFile)
-// } else {
-//   repl(env);
-// }
+if(sourceFile) {
+  evalFile(sourceFile)
+} else {
+  repl(env);
+}
 
 function preprocessFile(file){
   let content = fs.readFileSync(file).toString();
@@ -28,9 +28,6 @@ function preprocessFile(file){
   content = content.replace(/\n/g, " ");
   return `(progn ${content})`;
 }
-
-preprocessFile("../test.lisp");
-
 
 function evalFile(sourceFile) {
   const input = preprocessFile(sourceFile);
