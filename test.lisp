@@ -33,6 +33,6 @@
   (print "let works" a)
   (print "for multiple parameters" b)) ;3
 
-
 (. :log console "interop works")
+(.log console "interop works")
 (print '1)

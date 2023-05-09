@@ -1,4 +1,4 @@
-const { isSurroundedBy } = require('./utils')
+const { isSurroundedBy } = require('./utils/utils')
 
 // DOMAIN NOTES
 // ================================

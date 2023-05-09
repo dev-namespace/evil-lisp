@@ -1,7 +1,7 @@
 const { format } = require("./naming");
 const { unread } = require("./reader");
 const { parse } = require("./parser");
-const { attempt } = require("./utils");
+const { attempt } = require("./utils/utils");
 const { safeLookup, createEnvironment, defineVariable } = require("./environment");
 const {
   evaluateMacroDefinition,

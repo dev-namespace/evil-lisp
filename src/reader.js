@@ -1,4 +1,4 @@
-const { recursiveMap } = require('./utils')
+const { recursiveMap } = require('./utils/utils')
 
 let listOverridesPending = 0
 

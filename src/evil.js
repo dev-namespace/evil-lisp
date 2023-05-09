@@ -15,18 +15,25 @@ const debugMode = process.argv.debug;
 const compiledEval = process.argv.compiledEval;
 const env = createCompilationEnvironment();
 
-if(sourceFile) {
-  compileFile(sourceFile)
-} else {
-  repl(env);
-}
+// if(sourceFile) {
+//   evalFile(sourceFile)
+// } else {
+//   repl(env);
+// }
 
-function compileFile(sourceFile) {
-  let content = fs.readFileSync(sourceFile).toString();
+function preprocessFile(file){
+  let content = fs.readFileSync(file).toString();
   content = content.replace(/;.*/g, "");
   content = content.replace(/\r\n/g, " ");
   content = content.replace(/\n/g, " ");
-  const input = `(progn ${content})`;
+  return `(progn ${content})`;
+}
+
+preprocessFile("../test.lisp");
+
+
+function evalFile(sourceFile) {
+  const input = preprocessFile(sourceFile);
   const ast = parse(read(InputStream(input)), env);
 
   if (compiledEval) {
