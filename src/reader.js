@@ -14,7 +14,6 @@ const macroCharacters = {
         let token = readWhile(input, char => !isWhitespace(char) && !isTerminatingMacro(char))
 
         // (. log console "foo")
-        console.log('token:', token)
         if(token === ""){
             return '.'
         }
@@ -127,6 +126,8 @@ function readList(input){
 }
 
 function InputStream(input){
+    input = input.replace(/\[/g, '(');
+    input = input.replace(/\]/g, ')');
     const delimited = {} // number of open delimited expressions (eg: (), "", [])
     let pos = 0
     const next = () => input.charAt(pos++)
